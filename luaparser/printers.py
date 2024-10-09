@@ -226,6 +226,25 @@ class LuaOutputVisitor:
             return "(" + self.visit(node) + ")"
         return self.visit(node)
 
+    def visit_comments_impl(self, node: Node) -> str:
+        if node.comments and len(node.comments) > 0:
+            comments_output = []
+            for comment in node.comments:
+                if comment.is_multi_line:
+                    comments_output.append(f"{comment.s}")
+                else:  # 单行注释
+                    comments_output.append(f"{comment.s}")
+            return "\n".join(comments_output)  # 将所有注释合并为一个字符串
+        return ""
+
+    def visit_comments(self, node: Node, value):
+        # 在这里处理返回值的逻辑
+        comment = self.visit_comments_impl(node)
+        if len(comment) > 0:
+            return f"{comment}\n{value}"
+        else:
+            return value
+
     @multimethod
     def visit(self, node: Chunk) -> str:
         return self.do_visit(node.body)
@@ -237,7 +256,7 @@ class LuaOutputVisitor:
             "\n".join([self.do_visit(n) for n in node.body]), " " * (self._indent_size if self._level > 1 else 0)
         )
         self._level -= 1
-        return output
+        return self.visit_comments(node,output)
 
     @visit.register
     def visit(self, node: str) -> str:
@@ -261,24 +280,24 @@ class LuaOutputVisitor:
 
     @visit.register
     def visit(self, node: Assign) -> str:
-        return self.do_visit(node.targets) + " = " + self.do_visit(node.values)
+        return self.visit_comments(node, self.do_visit(node.targets) + " = " + self.do_visit(node.values))
 
     @visit.register
     def visit(self, node: LocalAssign) -> str:
         res = self.do_visit(node.values)
         if res == '':
-            return "local " + self.do_visit(node.targets)
-        return "local " + self.do_visit(node.targets) + " = " + res
+            return self.visit_comments(node, "local " + self.do_visit(node.targets))
+        return self.visit_comments(node, "local " + self.do_visit(node.targets) + " = " + res)
 
     @visit.register
     def visit(self, node: While) -> str:
-        return (
+        return self.visit_comments(node, (
                 "while " + self.do_visit(node.test) + " do\n" + self.do_visit(node.body) + "\nend"
-        )
+        ))
 
     @visit.register
     def visit(self, node: Do) -> str:
-        return "do\n" + self.do_visit(node.body) + "\nend"
+        return self.visit_comments(node, "do\n" + self.do_visit(node.body) + "\nend")
 
     @visit.register
     def visit(self, node: If) -> str:
@@ -290,7 +309,7 @@ class LuaOutputVisitor:
         elif node.orelse:
             output += "\nelse\n" + self.do_visit(node.orelse)
         output += "\nend"
-        return output
+        return self.visit_comments(node, output)
 
     @visit.register
     def visit(self, node: ElseIf) -> str:
@@ -301,26 +320,26 @@ class LuaOutputVisitor:
             output += "\n" + self.do_visit(node.orelse)
         elif node.orelse:
             output += "\nelse\n" + self.do_visit(node.orelse)
-        return output
+        return self.visit_comments(node, output)
 
     @visit.register
     def visit(self, node: Label) -> str:
-        return "::" + self.do_visit(node.id) + "::"
+        return self.visit_comments(node, "::" + self.do_visit(node.id) + "::")
 
     @visit.register
     def visit(self, node: Goto) -> str:
-        return "goto " + self.do_visit(node.label)
+        return self.visit_comments(node, "goto " + self.do_visit(node.label))
 
     @visit.register
     def visit(self, node: Break) -> str:
-        return "break"
+        return self.visit_comments(node, "break")
 
     @visit.register
     def visit(self, node: Return) -> str:
         res = self.do_visit(node.values)
         if res == "False":
-            return "return"
-        return "return " + res
+            return self.visit_comments(node, "return")
+        return self.visit_comments(node, "return " + res)
 
     @visit.register
     def visit(self, node: Fornum) -> str:
@@ -335,96 +354,76 @@ class LuaOutputVisitor:
         if node.step != 1:
             output += ", " + self.do_visit(node.step)
         output += " do\n" + self.do_visit(node.body) + "\nend"
-        return output
+        return self.visit_comments(node, output)
 
     @visit.register
     def visit(self, node: Forin) -> str:
-        return (
+        return self.visit_comments(node, (
                 " ".join(
                     ["for", self.do_visit(node.targets), "in", self.do_visit(node.iter), "do"]
                 )
                 + "\n"
                 + self.do_visit(node.body)
                 + "\nend"
-        )
+        ))
 
     @visit.register
     def visit(self, node: Call) -> str:
-        return self.do_visit(node.func) + "(" + self.do_visit(node.args) + ")"
+        return self.visit_comments(node, f"{self.do_visit(node.func)}({self.do_visit(node.args)})")
 
     @visit.register
     def visit(self, node: Invoke) -> str:
-        return (
-                self.do_visit(node.source)
-                + ":"
-                + self.do_visit(node.func)
-                + "("
-                + self.do_visit(node.args)
-                + ")"
-        )
+        return self.visit_comments(node, f"{self.do_visit(node.source)}:{self.do_visit(node.func)}({self.do_visit(node.args)})" )
 
     @visit.register
     def visit(self, node: Function) -> str:
-        return (
-                "function "
-                + self.do_visit(node.name)
-                + "("
-                + self.do_visit(node.args)
-                + ")\n"
+        
+        return self.visit_comments(node, (
+                f"function {self.do_visit(node.name)}({self.do_visit(node.args)})\n"
                 + self.do_visit(node.body)
                 + "\nend"
-        )
+        ))
 
     @visit.register
     def visit(self, node: LocalFunction) -> str:
-        return (
-                "local function "
-                + self.do_visit(node.name)
-                + "("
-                + self.do_visit(node.args)
-                + ")\n"
+        return self.visit_comments(node, (
+                f"local function {self.do_visit(node.name)}({self.do_visit(node.args)})\n"
                 + self.do_visit(node.body)
                 + "\nend"
-        )
+        ))
 
     @visit.register
     def visit(self, node: Method) -> str:
-        return (
-                "function "
-                + self.do_visit(node.source)
-                + ":"
-                + self.do_visit(node.name)
-                + "("
-                + self.do_visit(node.args)
-                + ")\n"
+        return self.visit_comments(node, (
+                f"function {self.do_visit(node.source)}:{self.do_visit(node.name)}({self.do_visit(node.args)})\n"
                 + self.do_visit(node.body)
                 + "\nend"
-        )
+        ))
 
     @visit.register
     def visit(self, node: Nil) -> str:
-        return "nil"
+        return self.visit_comments(node, "nil")
 
     @visit.register
     def visit(self, node: TrueExpr) -> str:
-        return "true"
+        return self.visit_comments(node, "true")
 
     @visit.register
     def visit(self, node: FalseExpr) -> str:
-        return "false"
+        return self.visit_comments(node, "false")
 
     @visit.register
     def visit(self, node: Number) -> str:
-        return self.do_visit(node.n)
+        return self.visit_comments(node, self.do_visit(node.n))
 
     @visit.register
     def visit(self, node: String) -> str:
         if node.delimiter == StringDelimiter.SINGLE_QUOTE:
-            return "'" + self.do_visit(node.s) + "'"
+            return self.visit_comments(node, f"'{self.do_visit(node.s)}'")
         elif node.delimiter == StringDelimiter.DOUBLE_QUOTE:
-            return '"' + self.do_visit(node.s) + '"'
+            return self.visit_comments(node, f'"{self.do_visit(node.s)}"' )
         else:
-            return "[[" + self.do_visit(node.s) + "]]"
+            return self.visit_comments(node, f"[[{self.do_visit(node.s)}]]")
 
     @visit.register
     def visit(self, node: Table):
@@ -432,150 +431,150 @@ class LuaOutputVisitor:
         for field in node.fields:
             output += indent(self.do_visit(field) + ",\n", " " * self._indent_size)
         output += "}"
-        return output
+        return self.visit_comments(node, output)
 
     @visit.register
     def visit(self, node: Field):
-        output = "[" if node.between_brackets else ""
-        output += self.do_visit(node.key)
-        output += "]" if node.between_brackets else ""
-        output += " = "
+        output = ""
+        if not isinstance(node.key, Number):
+            if node.between_brackets:
+                output += f"[{self.do_visit(node.key)}]="
+            else:
+                output += f"{self.do_visit(node.key)}="
         output += self.do_visit(node.value)
-        return output
+        return self.visit_comments(node, output)
 
     @visit.register
     def visit(self, node: Dots) -> str:
-        return "..."
+        return self.visit_comments(node, "...")
 
     @visit.register
     def visit(self, node: AnonymousFunction) -> str:
-        return (
-                "function("
-                + self.do_visit(node.args)
-                + ")\n"
+        return self.visit_comments(node, (
+                f"function({self.do_visit(node.args)})\n"
                 + self.do_visit(node.body)
                 + "\nend"
-        )
+        ))
 
     @visit.register
     def visit(self, node: AddOp) -> str:
-        return self.do_visit(node.left) + " + " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " + " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: SubOp) -> str:
-        return self.do_visit(node.left) + " - " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " - " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: MultOp) -> str:
-        return self.do_visit(node.left) + " * " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " * " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: FloatDivOp) -> str:
-        return self.do_visit(node.left) + " / " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " / " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: FloorDivOp) -> str:
-        return self.do_visit(node.left) + " // " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " // " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: ModOp) -> str:
-        return self.do_visit(node.left) + " % " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " % " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: ExpoOp) -> str:
-        return self.do_visit(node.left) + " ^ " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " ^ " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: BAndOp) -> str:
-        return self.do_visit(node.left) + " & " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " & " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: BOrOp) -> str:
-        return self.do_visit(node.left) + " | " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " | " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: BXorOp) -> str:
-        return self.do_visit(node.left) + " ~ " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " ~ " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: BShiftROp) -> str:
-        return self.do_visit(node.left) + " >> " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " >> " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: BShiftLOp) -> str:
-        return self.do_visit(node.left) + " << " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " << " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: LessThanOp) -> str:
-        return self.do_visit(node.left) + " < " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " < " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: GreaterThanOp) -> str:
-        return self.do_visit(node.left) + " > " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " > " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: LessOrEqThanOp) -> str:
-        return self.do_visit(node.left) + " <= " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " <= " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: GreaterOrEqThanOp) -> str:
-        return self.do_visit(node.left) + " >= " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " >= " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: EqToOp) -> str:
-        return self.do_visit(node.left) + " == " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " == " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: NotEqToOp) -> str:
-        return self.do_visit(node.left) + " ~= " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " ~= " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: AndLoOp) -> str:
-        return self.do_visit(node.left) + " and " + self.do_visit(node.right)
+        return self.visit_comments(node, f"{self.do_visit(node.left)} and {self.do_visit(node.right)}")
 
     @visit.register
     def visit(self, node: OrLoOp) -> str:
-        return self.do_visit(node.left) + " or " + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + " or " + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: Concat) -> str:
-        return self.do_visit(node.left) + ".." + self.do_visit(node.right)
+        return self.visit_comments(node, self.do_visit(node.left) + ".." + self.do_visit(node.right))
 
     @visit.register
     def visit(self, node: UMinusOp) -> str:
-        return "-" + self.do_visit(node.operand)
+        return self.visit_comments(node, "-" + self.do_visit(node.operand))
 
     @visit.register
     def visit(self, node: UBNotOp) -> str:
-        return "~" + self.do_visit(node.operand)
+        return self.visit_comments(node, "~" + self.do_visit(node.operand))
 
     @visit.register
     def visit(self, node: ULNotOp) -> str:
-        return "not " + self.do_visit(node.operand)
+        return self.visit_comments(node, "not " + self.do_visit(node.operand))
 
     @visit.register
     def visit(self, node: ULengthOP) -> str:
-        return "#" + self.do_visit(node.operand)
+        return self.visit_comments(node, "#" + self.do_visit(node.operand))
 
     @visit.register
     def visit(self, node: Name) -> str:
-        return self.do_visit(node.id)
+        return self.visit_comments(node, self.do_visit(node.id))
 
     @visit.register
     def visit(self, node: Index) -> str:
         if node.notation == IndexNotation.DOT:
-            return self.do_visit(node.value) + "." + self.do_visit(node.idx)
+            return self.visit_comments(node, self.do_visit(node.value) + "." + self.do_visit(node.idx))
         else:
-            return self.do_visit(node.value) + "[" + self.do_visit(node.idx) + "]"
+            return self.visit_comments(node, self.do_visit(node.value) + "[" + self.do_visit(node.idx) + "]")
 
     @visit.register
     def visit(self, node: Varargs) -> str:
-        return "..."
+        return self.visit_comments(node, "...")
 
     @visit.register
     def visit(self, node: Repeat) -> str:
-        return "repeat\n" + self.do_visit(node.body) + "\nuntil " + self.do_visit(node.test)
+        return self.visit_comments(node, "repeat\n" + self.do_visit(node.body) + "\nuntil " + self.do_visit(node.test))
 
     @visit.register
     def visit(self, node: SemiColon) -> str:
-        return ";"
+        return self.visit_comments(node, ";")
