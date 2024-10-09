@@ -11,7 +11,7 @@ setup(
     description='A lua parser in Python',
     long_description=long_description,
     url='https://github.com/boolangery/py-lua-parser',
-    download_url='https://github.com/boolangery/py-lua-parser/archive/' + luaparser.__version__ + '.tar.gz',
+    # download_url='https://github.com/boolangery/py-lua-parser/archive/' + luaparser.__version__ + '.tar.gz',
     author='Eliott Dumeix',
     author_email='eliott.dumeix@gmail.com',
     license='MIT',

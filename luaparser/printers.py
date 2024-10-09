@@ -217,8 +217,9 @@ class HTMLStyleVisitor:
 
 
 class LuaOutputVisitor:
-    def __init__(self, indent_size: int):
+    def __init__(self, indent_size: int, no_comment:bool):
         self._indent_size = indent_size
+        self._no_comment = no_comment
         self._level = 0
 
     def do_visit(self, node: Node) -> str:
@@ -227,7 +228,7 @@ class LuaOutputVisitor:
         return self.visit(node)
 
     def visit_comments_impl(self, node: Node) -> str:
-        if node.comments and len(node.comments) > 0:
+        if not self._no_comment and node.comments and len(node.comments) > 0:
             comments_output = []
             for comment in node.comments:
                 if comment.is_multi_line:
