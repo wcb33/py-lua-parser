@@ -2,6 +2,7 @@ import textwrap
 
 from luaparser import ast
 from luaparser.utils import tests
+from luaparser.ast import Comment, SemiColon
 
 
 class LuaOutputTestCase(tests.TestCase):
@@ -140,3 +141,21 @@ class LuaOutputTestCase(tests.TestCase):
     def test_parenthesis(self):
         source = "a = (1 * 2) + 3"
         self.assertEqual(source, ast.to_lua_source(ast.parse(source)))
+
+    def test_parenthesis_2(self):
+        source = """
+-- test func
+a = (1 * 2) + 3
+"""
+        res = "a = (1 * 2) + 3"
+        self.assertEqual(res, ast.to_lua_source(ast.parse(source), ignore_type=[Comment]))
+
+    def test_parenthesis_3(self):
+        source = """
+-- test func
+a = (1 * 2) + 3;
+"""
+        res = """\
+a = (1 * 2) + 3
+"""
+        self.assertEqual(res, ast.to_lua_source(ast.parse(source), ignore_type=[Comment, SemiColon]))
