@@ -644,7 +644,7 @@ class LuaOutputVisitor:
 
     @visit.register
     def visit(self, node: Index) -> str:
-        if node.notation == IndexNotation.DOT:
+        if node.notation == IndexNotation.DOT and isinstance(node.idx, (Index,Name)):
             return self.visit_comments(
                 node, self.do_visit(node.value) + "." + self.do_visit(node.idx)
             )
