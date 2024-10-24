@@ -6,7 +6,7 @@ from luaparser.builder import Builder
 from luaparser.utils.visitor import *
 from antlr4.error.ErrorListener import ErrorListener
 import json
-from typing import Generator, Type
+from typing import Callable, Generator, Type
 
 
 def parse(source: str) -> Chunk:
@@ -36,8 +36,15 @@ def to_pretty_str(root: Node, indent=2) -> str:
     return printers.PythonStyleVisitor(indent).visit(root)
 
 
-def to_lua_source(root: Node, indent=4, ignore_type:List[Type] = []) -> str:
-    return printers.LuaOutputVisitor(indent_size=indent, ignore_types=ignore_type).visit(root)
+def to_lua_source(
+    root: Node,
+    indent_size=4,
+    ignore_types: List[Type] = [],
+    should_indent_callback: Optional[Callable[[Table], bool]] = None,
+) -> str:
+    return printers.LuaOutputVisitor(
+        indent_size, ignore_types, should_indent_callback
+    ).visit(root)
 
 
 def to_xml_str(tree):

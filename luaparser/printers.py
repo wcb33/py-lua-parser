@@ -5,7 +5,7 @@
     Contains utilities to render an ast tree to text or html.
 """
 
-from typing import List, Type
+from typing import Callable, List, Type
 from luaparser.astnodes import *
 from luaparser.utils.visitor import *
 from enum import Enum
@@ -218,9 +218,10 @@ class HTMLStyleVisitor:
 
 
 class LuaOutputVisitor:
-    def __init__(self, indent_size: int, ignore_types: List[Type]):
+    def __init__(self, indent_size: int, ignore_types: List[Type], should_indent_callback: Optional[Callable[[Table],bool]]):
         self._indent_size = indent_size
         self._ignore_types = tuple(ignore_types)
+        self._should_indent_callback = should_indent_callback
         self._level = 0
 
     def do_visit(self, node: Node) -> str:
@@ -464,10 +465,21 @@ class LuaOutputVisitor:
 
     @visit.register
     def visit(self, node: Table):
-        output = "{\n"
-        for field in node.fields:
-            output += indent(self.do_visit(field) + ",\n", " " * self._indent_size)
-        output += "}"
+        if self._should_indent_callback and self._should_indent_callback(node):
+            output = "{ "
+            for field in node.fields:
+                if len(field.comments) > 0:
+                    output += "\n"
+                output += self.do_visit(field) + ", "
+            # 检查并移除最后的逗号
+            if output.endswith(", "):
+                output = output[:-2]  # 移除最后的逗号和空格
+            output += " }"
+        else:
+            output = "{\n"
+            for field in node.fields:
+                output += indent(self.do_visit(field) + ",\n", " " * self._indent_size)
+            output += "}"
         return self.visit_comments(node, output)
 
     @visit.register

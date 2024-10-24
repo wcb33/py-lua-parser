@@ -1,8 +1,9 @@
+from ast import Name
 import textwrap
 
 from luaparser import ast
+from luaparser.astnodes import *
 from luaparser.utils import tests
-from luaparser.ast import Comment, SemiColon
 
 
 class LuaOutputTestCase(tests.TestCase):
@@ -148,7 +149,7 @@ class LuaOutputTestCase(tests.TestCase):
 a = (1 * 2) + 3
 """
         res = "a = (1 * 2) + 3"
-        self.assertEqual(res, ast.to_lua_source(ast.parse(source), ignore_type=[Comment]))
+        self.assertEqual(res, ast.to_lua_source(ast.parse(source), ignore_types=[Comment]))
 
     def test_parenthesis_3(self):
         source = """
@@ -158,4 +159,73 @@ a = (1 * 2) + 3;
         res = """\
 a = (1 * 2) + 3
 """
-        self.assertEqual(res, ast.to_lua_source(ast.parse(source), ignore_type=[Comment, SemiColon]))
+        self.assertEqual(res, ast.to_lua_source(ast.parse(source), ignore_types=[Comment, SemiColon]))
+
+    def test_parenthesis_4(self):
+        source = """
+        test_table = {
+        ["zqdm"] = {
+                def = "",
+                field = "stock_code",
+            },
+            }
+        """
+        res = """\
+test_table = {
+    ["zqdm"] = { def = "", field = "stock_code" },
+}"""
+
+        def custom_should_indent(node:Table):
+            for item in node.fields:
+                if isinstance(item.key,Name):
+                    if item.key.id == "def" or item.key.id == "field":
+                        return True
+
+            return False
+        self.maxDiff=None
+        str1 = ast.to_lua_source(ast.parse(source), ignore_types=[Comment, SemiColon], should_indent_callback=custom_should_indent) 
+        self.assertEqual(res, str1)
+
+
+    def test_parenthesis_5(self):
+        source = """\
+        a = CreateReturnHDFile({
+                    'index',
+                    {
+                        'cj_rq', '发生日期', DTE_STRING + WT_CJ_RQ,
+                        DD_RIGHT, 8, 3
+                    }, 'wt_rq', 'cj_sj', 'zqdm',
+                    {'zqmc', '', DTE_STRING + WT_ZQMC, DD_LEFT, 16, 3},
+                    {
+                        'czlb', '业务名称', DTE_STRING + WT_CZLB, DD_RIGHT,
+                        16, 3
+                    }
+                })
+        """
+        res = """\
+a = CreateReturnHDFile({
+    'index',
+    { 'cj_rq', '发生日期', DTE_STRING + WT_CJ_RQ, DD_RIGHT, 8, 3 },
+    'wt_rq',
+    'cj_sj',
+    'zqdm',
+    { 'zqmc', '', DTE_STRING + WT_ZQMC, DD_LEFT, 16, 3 },
+    { 'czlb', '业务名称', DTE_STRING + WT_CZLB, DD_RIGHT, 16, 3 },
+})"""
+
+        def custom_should_indent(node:Table):
+            if len(node.fields) == 0:
+                return True  # 如果 fields 为空，直接返回 True
+
+            first_item = node.fields[0]  # 获取第一个 item
+
+            if isinstance(first_item.key, Name):
+                return first_item.key.id in {"def", "field", "change"}
+            elif isinstance(first_item.key, Number):
+                # 检查所有 fields 是否为 Number 或 String
+                return all(isinstance(item.value, (Number, String, Name, Index, AddOp)) for item in node.fields)
+            else:
+                return False  # 其他类型的 key 返回 False
+        self.maxDiff=None
+        str1 = ast.to_lua_source(ast.parse(source), ignore_types=[Comment, SemiColon], should_indent_callback=custom_should_indent) 
+        self.assertEqual(res, str1)
